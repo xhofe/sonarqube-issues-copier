@@ -1,15 +1,17 @@
 import { defineConfig } from 'vite';
 import monkey from 'vite-plugin-monkey';
 
-// https://vitejs.dev/config/
+// Add self-hosted origins here, e.g. 'https://sonar.example.com'
+const HOSTS = ['https://sonarcloud.io'];
+
 export default defineConfig({
   plugins: [
     monkey({
       entry: 'src/main.ts',
       userscript: {
-        icon: 'https://vitejs.dev/logo.svg',
-        namespace: 'npm/vite-plugin-monkey',
-        match: ['https://www.google.com/'],
+        name: 'SonarQube Issues Copier',
+        namespace: 'sonarqube-issues-copier',
+        match: HOSTS.map((host) => `${host}/*`),
       },
     }),
   ],
