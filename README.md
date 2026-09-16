@@ -8,7 +8,7 @@
 
 点击安装：
 
-[https://github.com/xhofe/sonarqube-issues-copier/raw/main/dist/sonarqube-issues-copier.user.js](https://github.com/xhofe/sonarqube-issues-copier/raw/main/dist/sonarqube-issues-copier.user.js)
+[Greasyfork](https://greasyfork.org/zh-CN/scripts/596054)
 
 `@match` 为 `*://*/*`。脚本只在识别到 Sonar 页面、且路径为 Issues 列表时显示按钮，不会在 GitHub 等站点误出。
 
