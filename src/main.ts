@@ -39,9 +39,28 @@ class AuthError extends Error {
   }
 }
 
+function isSonarApp(): boolean {
+  const instance = document
+    .querySelector('[data-instance]')
+    ?.getAttribute('data-instance');
+  if (instance === 'SonarQube' || instance === 'SonarCloud') return true;
+  if (/SonarQube|SonarCloud/.test(document.title)) return true;
+  for (const script of document.scripts) {
+    const text = script.textContent;
+    if (text && /window\.instance\s*=\s*['"]Sonar(?:Qube|Cloud)['"]/.test(text)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isIssuesListPath(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, '');
   return path.endsWith('/project/issues') || path.endsWith('/issues');
+}
+
+function shouldShowButton(): boolean {
+  return isSonarApp() && isIssuesListPath(location.pathname);
 }
 
 function apiRoot(pathname: string): string {
@@ -142,69 +161,91 @@ function onRouteChange(cb: () => void): void {
 }
 
 function setupButton(): void {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'sq-issues-copier';
-  btn.innerHTML = `${COPY_ICON}<span>${IDLE}</span>`;
-  const label = btn.querySelector('span')!;
-  document.documentElement.append(btn);
-
+  let btn: HTMLButtonElement | undefined;
+  let label: HTMLSpanElement | undefined;
   let busy = false;
   let resetTimer = 0;
 
   const setLabel = (text: string, revert = false) => {
+    if (!label) return;
     label.textContent = text;
     window.clearTimeout(resetTimer);
     if (revert) {
       resetTimer = window.setTimeout(() => {
-        label.textContent = IDLE;
+        if (label) label.textContent = IDLE;
       }, 2000);
     }
   };
 
-  const syncVisibility = () => {
-    btn.hidden = !isIssuesListPath(location.pathname);
+  const ensureButton = () => {
+    if (btn) return btn;
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sq-issues-copier';
+    btn.innerHTML = `${COPY_ICON}<span>${IDLE}</span>`;
+    label = btn.querySelector('span')!;
+    document.documentElement.append(btn);
+
+    btn.addEventListener('click', async () => {
+      if (busy || !btn || btn.hidden) return;
+      busy = true;
+      btn.disabled = true;
+      setLabel('正在拉取…');
+      try {
+        const url = new URL(location.href);
+        const result = await fetchAllIssues(
+          url.pathname,
+          buildSearchParams(url),
+          (copied, total) => {
+            setLabel(
+              total == null
+                ? `正在拉取 ${copied}…`
+                : `正在拉取 ${copied}/${total}…`,
+            );
+          },
+        );
+        const project =
+          result.issues[0]?.project ?? url.searchParams.get('id') ?? '(unknown)';
+        const text = formatPrompt(result.issues, {
+          project,
+          branch: url.searchParams.get('branch') ?? undefined,
+          copied: result.issues.length,
+          total: result.total,
+          truncated: result.truncated,
+        });
+        await copyText(text);
+        setLabel(`已复制 ${result.issues.length} 条`, true);
+      } catch (err) {
+        setLabel(err instanceof AuthError ? '未登录 (401)' : '拉取失败', true);
+      } finally {
+        busy = false;
+        if (btn) btn.disabled = false;
+      }
+    });
+    return btn;
   };
 
-  btn.addEventListener('click', async () => {
-    if (busy || btn.hidden) return;
-    busy = true;
-    btn.disabled = true;
-    setLabel('正在拉取…');
-    try {
-      const url = new URL(location.href);
-      const result = await fetchAllIssues(
-        url.pathname,
-        buildSearchParams(url),
-        (copied, total) => {
-          setLabel(
-            total == null
-              ? `正在拉取 ${copied}…`
-              : `正在拉取 ${copied}/${total}…`,
-          );
-        },
-      );
-      const project =
-        result.issues[0]?.project ?? url.searchParams.get('id') ?? '(unknown)';
-      const text = formatPrompt(result.issues, {
-        project,
-        branch: url.searchParams.get('branch') ?? undefined,
-        copied: result.issues.length,
-        total: result.total,
-        truncated: result.truncated,
-      });
-      await copyText(text);
-      setLabel(`已复制 ${result.issues.length} 条`, true);
-    } catch (err) {
-      setLabel(err instanceof AuthError ? '未登录 (401)' : '拉取失败', true);
-    } finally {
-      busy = false;
-      btn.disabled = false;
+  const syncVisibility = () => {
+    if (!shouldShowButton()) {
+      if (btn) btn.hidden = true;
+      return;
     }
-  });
+    ensureButton().hidden = false;
+  };
 
-  syncVisibility();
-  onRouteChange(syncVisibility);
+  let watching = false;
+  const start = () => {
+    syncVisibility();
+    if (!watching && isSonarApp()) {
+      watching = true;
+      onRouteChange(syncVisibility);
+    }
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
 }
 
 setupButton();
