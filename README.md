@@ -49,4 +49,4 @@ pnpm test
 pnpm build    # 产出 dist/sonarqube-issues-copier.user.js
 ```
 
-推送到 `main` 后，CI 会构建并把 `dist/` 提交回去。
+推送到 `main` 后，CI 会构建并把产物与 README 推送到 `dist` 分支。

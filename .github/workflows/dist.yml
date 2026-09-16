@@ -24,11 +24,15 @@ jobs:
 
       - name: build dist
         run: pnpm build
-        
-      - name: Add, Commit and Push
-        uses: stefanzweifel/git-auto-commit-action@v7
+
+      - name: Prepare dist branch
+        run: cp README.md dist/
+
+      - name: Push dist branch
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          commit_message: "chore: build dist script"
-          commit_user_name: Isla
-          commit_user_email: bot@nn.ci
-          commit_author: "Isla <bot@nn.ci>"
+          folder: dist
+          branch: dist
+          git-config-name: Isla
+          git-config-email: bot@nn.ci
+          commit-message: "chore: build dist script"
